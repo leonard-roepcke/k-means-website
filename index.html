@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>K-Means Lab</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a10;--bg2:#12121a;--bg3:#1a1a24;--card:#1e1e2a;
+  --border:#2a2a3a;--border2:#3a3a52;--text:#f0f0f5;--muted:#8888a8;--muted2:#4a4a68;
+  --purple:#7f77dd;--purple-l:#b8b3f0;--purple-d:#3c3489;
+  --teal:#1d9e75;--teal-l:#5dcaa5;
+  --coral:#d85a30;--coral-l:#f0997b;
+  --amber:#ba7517;--amber-l:#ef9f27;
+  --blue:#378add;--blue-l:#85b7eb;
+  --r:12px;--rs:8px;
+  --glow-purple:0 0 18px #7f77dd55, 0 0 40px #7f77dd22;
+  --glow-teal:0 0 18px #1d9e7555, 0 0 40px #1d9e7522;
+  --glow-coral:0 0 18px #d85a3055, 0 0 40px #d85a3022;
+  --glow-amber:0 0 18px #ba751755, 0 0 40px #ba751722;
+}
+html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);overflow-x:hidden}
+
+/* ── AMBIENT BG GLOW ── */
+body::before{
+  content:'';position:fixed;top:-30%;left:50%;transform:translateX(-50%);
+  width:600px;height:400px;
+  background:radial-gradient(ellipse,#7f77dd12 0%,transparent 70%);
+  pointer-events:none;z-index:0;
+}
+body::after{
+  content:'';position:fixed;bottom:-20%;left:20%;
+  width:400px;height:300px;
+  background:radial-gradient(ellipse,#1d9e7510 0%,transparent 70%);
+  pointer-events:none;z-index:0;
+}
+
+.screen{display:none;min-height:100vh;flex-direction:column;align-items:center;position:relative;z-index:1}
+.screen.active{display:flex}
+.topbar{width:100%;max-width:780px;display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem 0}
+.logo{font-size:13px;font-weight:700;letter-spacing:.1em;color:var(--purple-l);text-transform:uppercase;
+  text-shadow:0 0 12px #7f77ddaa}
+.lang-toggle{display:flex;gap:4px}
+.lang-btn{font-size:12px;padding:4px 10px;border-radius:var(--rs);border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;transition:all .2s}
+.lang-btn.active{background:var(--purple);color:#fff;border-color:var(--purple);box-shadow:0 0 10px #7f77dd66}
+
+/* ── LEVEL SELECT ── */
+#screen-select{padding-bottom:4rem}
+.sel-inner{width:100%;max-width:780px;padding:1.5rem 1.25rem}
+.sel-title{font-size:28px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
+.sel-sub{font-size:14px;color:var(--muted);margin-bottom:2rem}
+.lvl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:12px}
+
+.lvl-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--r);
+  padding:1.1rem;cursor:pointer;transition:all .25s;position:relative;overflow:hidden;
+}
+.lvl-card::before{
+  content:'';position:absolute;inset:0;border-radius:var(--r);
+  background:radial-gradient(ellipse at 50% 0%,#7f77dd10 0%,transparent 70%);
+  opacity:0;transition:opacity .3s;pointer-events:none;
+}
+.lvl-card:hover:not(.locked)::before{opacity:1;}
+.lvl-card:hover:not(.locked){border-color:var(--purple);transform:translateY(-2px);box-shadow:var(--glow-purple);}
+.lvl-card.locked{opacity:.32;cursor:not-allowed;filter:grayscale(.4)}
+.lvl-card.completed{border-color:var(--teal);box-shadow:var(--glow-teal)}
+.lvl-card.completed::before{background:radial-gradient(ellipse at 50% 0%,#1d9e7510 0%,transparent 70%);opacity:1}
+.lvl-card .lnum{font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+.lvl-card .lname{font-size:14px;font-weight:600;margin-bottom:4px}
+.lvl-card .ldiff{font-size:11px;padding:2px 8px;border-radius:20px;display:inline-block;margin-bottom:8px}
+.de{background:#1d9e7520;color:var(--teal-l)}
+.dm{background:#ba751720;color:var(--amber-l)}
+.dh{background:#d85a3020;color:var(--coral-l)}
+.db{background:#7f77dd20;color:var(--purple-l)}
+.lvl-card .ldesc{font-size:11px;color:var(--muted2);margin-bottom:10px}
+.lvl-card .lbar{height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+.lvl-card .lfill{height:100%;border-radius:2px;transition:width .5s}
+.lvl-card .lock{position:absolute;top:10px;right:10px;font-size:15px;opacity:.6}
+.lvl-card .req{position:absolute;bottom:8px;right:10px;font-size:10px;color:var(--muted2)}
+.unlock-section{width:100%;max-width:780px;padding:0 1.25rem;margin-top:1.5rem;display:flex;flex-direction:column;align-items:center;gap:8px}
+.unlock-divider{width:100%;height:1px;background:var(--border);margin-bottom:.5rem}
+.unlock-btn{
+  padding:10px 24px;border-radius:var(--rs);border:1px solid var(--border2);
+  background:transparent;color:var(--muted);font-size:13px;cursor:pointer;transition:all .2s;
+}
+.unlock-btn:hover{border-color:var(--purple-l);color:var(--purple-l);box-shadow:var(--glow-purple)}
+.unlock-hint{font-size:11px;color:var(--muted2);text-align:center}
+
+/* ── SCORE REQUIREMENT TOAST ── */
+.req-toast{
+  position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);
+  background:var(--card);border:1px solid var(--coral);border-radius:var(--r);
+  padding:.8rem 1.25rem;font-size:13px;color:var(--coral-l);
+  box-shadow:var(--glow-coral);z-index:1000;
+  animation:toastIn .3s ease,toastOut .4s ease 2.6s forwards;
+  pointer-events:none;text-align:center;max-width:320px;
+}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes toastOut{from{opacity:1}to{opacity:0}}
+
+/* ── SHARED LEVEL ── */
+.lw{width:100%;max-width:780px;padding:1rem 1.25rem 3rem;flex:1}
+.sprog{display:flex;gap:5px;margin-bottom:1.25rem}
+.sdot{flex:1;height:3px;border-radius:2px;background:var(--border);transition:all .3s}
+.sdot.done{background:var(--purple);box-shadow:0 0 6px #7f77dd88}
+.sdot.cur{background:var(--purple-l);box-shadow:0 0 8px #b8b3f0aa}
+
+.icard{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--r);
+  padding:1rem 1.25rem;margin-bottom:.9rem;
+  box-shadow:0 2px 20px #00000030;
+  position:relative;overflow:hidden;
+}
+.icard::after{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,#7f77dd44,transparent);
+}
+.tag{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em}
+.ta{background:#7f77dd20;color:var(--purple-l);box-shadow:0 0 8px #7f77dd33}
+.ti{background:#1d9e7520;color:var(--teal-l);box-shadow:0 0 8px #1d9e7533}
+.tq{background:#ba751720;color:var(--amber-l);box-shadow:0 0 8px #ba751733}
+.icard h2{font-size:16px;font-weight:600;margin-bottom:5px}
+.icard p{font-size:14px;color:var(--muted);line-height:1.65}
+
+.hint{font-size:12px;color:var(--muted2);text-align:center;margin:5px 0;min-height:18px}
+
+canvas.cv{
+  width:100%;border:1px solid var(--border);border-radius:var(--r);
+  background:var(--bg2);display:block;touch-action:none;
+  box-shadow:0 0 30px #00000040, inset 0 0 40px #7f77dd08;
+}
+
+.legend{display:flex;gap:10px;flex-wrap:wrap;margin:.65rem 0}
+.li{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.ld{width:11px;height:11px;border-radius:50%;border:2px solid transparent;flex-shrink:0}
+
+.srow{display:flex;gap:8px;margin:.7rem 0}
+.sc{
+  flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs);
+  padding:8px 10px;text-align:center;transition:box-shadow .3s;
+}
+.sc.glow{box-shadow:var(--glow-purple)}
+.sc .sv{font-size:20px;font-weight:700;color:var(--purple-l);text-shadow:0 0 10px #7f77dd66}
+.sc .sl{font-size:11px;color:var(--muted);margin-top:1px}
+
+.brow{display:flex;gap:8px;margin-top:.9rem}
+.bnext{
+  flex:1;padding:11px;font-size:14px;font-weight:600;border-radius:var(--rs);
+  border:none;background:var(--purple);color:#fff;cursor:pointer;
+  transition:all .2s;box-shadow:var(--glow-purple);
+}
+.bnext:hover{opacity:.9;box-shadow:0 0 24px #7f77ddaa,0 0 50px #7f77dd33}
+.bnext:disabled{opacity:.25;cursor:not-allowed;box-shadow:none}
+.bback{padding:11px 16px;font-size:14px;border-radius:var(--rs);border:1px solid var(--border2);background:transparent;color:var(--text);cursor:pointer;transition:all .2s}
+.bback:hover{background:var(--card);border-color:var(--border2)}
+.bback:disabled{opacity:.28;cursor:not-allowed}
+.bhome{padding:11px 14px;font-size:14px;border-radius:var(--rs);border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;transition:all .2s}
+.bhome:hover{background:var(--card)}
+
+.cbanner{
+  background:linear-gradient(135deg,#1d9e7514,#1d9e7508);
+  border:1px solid var(--teal);border-radius:var(--r);
+  padding:1.25rem;text-align:center;margin-top:1rem;
+  box-shadow:var(--glow-teal);
+}
+.cbanner h3{color:var(--teal-l);font-size:17px;font-weight:600;margin-bottom:4px;text-shadow:0 0 12px #5dcaa588}
+.cbanner p{font-size:13px;color:var(--teal-l);opacity:.8}
+.cbanner .cscore{font-size:24px;font-weight:700;color:var(--teal-l);margin:.4rem 0;text-shadow:0 0 16px #5dcaa5aa}
+.cbanner .cnext{
+  margin-top:12px;padding:9px 22px;border-radius:var(--rs);
+  background:var(--teal);color:#fff;border:none;font-size:13px;font-weight:600;cursor:pointer;
+  transition:all .2s;box-shadow:var(--glow-teal);
+}
+.cbanner .cnext:hover{opacity:.85;box-shadow:0 0 20px #1d9e7599}
+.cbanner .cnext:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+.cbanner .cunlock-note{font-size:12px;color:var(--coral-l);margin-top:8px;opacity:.9}
+
+.sdisplay{
+  display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;
+  color:var(--teal-l);background:var(--bg3);border:1px solid var(--border);
+  border-radius:var(--rs);padding:6px 14px;margin-bottom:.75rem;
+  box-shadow:0 0 12px #1d9e7522;
+}
+.sdisplay span{color:var(--muted);font-weight:400;font-size:12px}
+.frow{min-height:26px;display:flex;align-items:center;gap:8px;margin:.4rem 0}
+.fmsg{font-size:13px;font-weight:500;padding:3px 10px;border-radius:20px}
+.fok{background:#1d9e7520;color:var(--teal-l);box-shadow:0 0 8px #1d9e7533}
+.fbad{background:#d85a3020;color:var(--coral-l);box-shadow:0 0 8px #d85a3033}
+
+/* video */
+.vwrap{position:relative;width:100%;padding-bottom:56.25%;border-radius:var(--r);overflow:hidden;background:#000;margin-bottom:.9rem;box-shadow:var(--glow-purple)}
+.vwrap iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0}
+.vph{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);cursor:pointer}
+.vph .vplay{width:60px;height:60px;border-radius:50%;background:var(--purple);display:flex;align-items:center;justify-content:center;transition:all .2s;box-shadow:var(--glow-purple)}
+.vph:hover .vplay{transform:scale(1.1);box-shadow:0 0 24px #7f77ddaa}
+.vph .vplay svg{width:22px;height:22px;fill:#fff;margin-left:3px}
+.vph p{font-size:13px;color:var(--muted)}
+.vurl{display:flex;gap:8px;margin-bottom:.75rem;align-items:center}
+.vurl input{flex:1;padding:8px 12px;border-radius:var(--rs);border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:13px;outline:none;transition:border-color .2s}
+.vurl input:focus{border-color:var(--purple);box-shadow:0 0 8px #7f77dd33}
+.vurl button{padding:8px 14px;border-radius:var(--rs);border:none;background:var(--purple);color:#fff;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 0 10px #7f77dd44}
+
+@media(max-width:520px){.lvl-grid{grid-template-columns:1fr 1fr}.sel-title{font-size:22px}}
+</style>
+</head>
+<body>
+
+<!-- ══ LEVEL SELECT ══ -->
+<div class="screen active" id="screen-select">
+  <div class="topbar">
+    <span class="logo">⬡ K-Means Lab</span>
+    <div class="lang-toggle">
+      <button class="lang-btn active" onclick="setLang('de')">DE</button>
+      <button class="lang-btn" onclick="setLang('en')">EN</button>
+    </div>
+  </div>
+  <div class="sel-inner">
+    <h1 class="sel-title" id="sel-title">Levelauswahl</h1>
+    <p class="sel-sub" id="sel-sub">Lerne K-Means Schritt für Schritt</p>
+    <div class="lvl-grid" id="lvl-grid"></div>
+  </div>
+  <div class="unlock-section">
+    <div class="unlock-divider"></div>
+    <button class="unlock-btn" id="unlock-all-btn" onclick="unlockAll()">🔓 Alle Level freischalten</button>
+    <p class="unlock-hint" id="unlock-hint">Für Fortgeschrittene – überspringt die Reihenfolge</p>
+  </div>
+</div>
+
+<!-- ══ INTRO ══ -->
+<div class="screen" id="screen-intro">
+  <div class="topbar"><span class="logo">⬡ K-Means Lab</span><div class="lang-toggle"><button class="lang-btn active" onclick="setLang('de')">DE</button><button class="lang-btn" onclick="setLang('en')">EN</button></div></div>
+  <div class="lw">
+    <div class="icard">
+      <span class="tag ta" id="i-tag">Einführung</span>
+      <h2 id="i-title">Bevor es losgeht</h2>
+      <p id="i-text"></p>
+    </div>
+    <div class="vurl">
+      <input type="text" id="vurl-input" placeholder="YouTube URL einfügen (optional)">
+      <button onclick="loadVideo()">Laden</button>
+    </div>
+    <div class="vwrap" id="vcontainer">
+      <div class="vph" id="vph" onclick="promptVideo()">
+        <div class="vplay"><svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg></div>
+        <p id="vph-text">YouTube-Video einfügen</p>
+      </div>
+    </div>
+    <div class="hint" id="i-hint"></div>
+    <div class="brow">
+      <button class="bhome" onclick="goHome()">← Zurück</button>
+      <button class="bnext" onclick="completeIntro()" id="i-btn">Level 1 starten →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LEVEL 1 ══ -->
+<div class="screen" id="screen-l1">
+  <div class="topbar"><span class="logo">⬡ K-Means Lab</span><div class="lang-toggle"><button class="lang-btn active" onclick="setLang('de')">DE</button><button class="lang-btn" onclick="setLang('en')">EN</button></div></div>
+  <div class="lw">
+    <div class="sprog" id="l1-prog"></div>
+    <div class="icard"><span class="tag" id="l1-tag"></span><h2 id="l1-title"></h2><p id="l1-text"></p></div>
+    <canvas class="cv" id="l1-cv" width="720" height="360"></canvas>
+    <div class="legend" id="l1-leg"></div>
+    <div class="hint" id="l1-hint"></div>
+    <div class="srow" id="l1-stats" style="display:none">
+      <div class="sc"><div class="sv" id="l1-sk">3</div><div class="sl" id="l1-skl">k</div></div>
+      <div class="sc"><div class="sv" id="l1-spt">0</div><div class="sl" id="l1-spl">Punkte</div></div>
+      <div class="sc"><div class="sv" id="l1-sit">0</div><div class="sl" id="l1-sil">Iteration</div></div>
+    </div>
+    <div class="brow">
+      <button class="bhome" onclick="goHome()">⌂</button>
+      <button class="bback" id="l1-back" onclick="l1Prev()">←</button>
+      <button class="bnext" id="l1-next" onclick="l1Next()">Weiter</button>
+    </div>
+    <div class="cbanner" id="l1-done" style="display:none">
+      <h3 id="l1-dt"></h3>
+      <div class="cscore" id="l1-dscore"></div>
+      <p id="l1-dp"></p>
+      <p class="cunlock-note" id="l1-unlock-note" style="display:none"></p>
+      <button class="cnext" onclick="goLevel(2)" id="l1-db"></button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LEVEL 2 ══ -->
+<div class="screen" id="screen-l2">
+  <div class="topbar"><span class="logo">⬡ K-Means Lab</span><div class="lang-toggle"><button class="lang-btn active" onclick="setLang('de')">DE</button><button class="lang-btn" onclick="setLang('en')">EN</button></div></div>
+  <div class="lw">
+    <div class="sprog" id="l2-prog"></div>
+    <div class="icard"><span class="tag" id="l2-tag"></span><h2 id="l2-title"></h2><p id="l2-text"></p></div>
+    <div class="sdisplay" id="l2-score" style="display:none"><span id="l2-sn">0</span><span id="l2-sl">/ 0 richtig</span></div>
+    <canvas class="cv" id="l2-cv" width="720" height="360" style="cursor:crosshair"></canvas>
+    <div class="legend" id="l2-leg"></div>
+    <div class="frow" id="l2-fb"></div>
+    <div class="hint" id="l2-hint"></div>
+    <div class="brow">
+      <button class="bhome" onclick="goHome()">⌂</button>
+      <button class="bback" id="l2-back" onclick="l2Prev()">←</button>
+      <button class="bnext" id="l2-next" onclick="l2Next()">Weiter</button>
+    </div>
+    <div class="cbanner" id="l2-done" style="display:none">
+      <h3 id="l2-dt"></h3>
+      <div class="cscore" id="l2-dscore"></div>
+      <p id="l2-dp"></p>
+      <p class="cunlock-note" id="l2-unlock-note" style="display:none"></p>
+      <button class="cnext" onclick="goLevel(3)" id="l2-db"></button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LEVEL 3 ══ -->
+<div class="screen" id="screen-l3">
+  <div class="topbar"><span class="logo">⬡ K-Means Lab</span><div class="lang-toggle"><button class="lang-btn active" onclick="setLang('de')">DE</button><button class="lang-btn" onclick="setLang('en')">EN</button></div></div>
+  <div class="lw">
+    <div class="sprog" id="l3-prog"></div>
+    <div class="icard"><span class="tag" id="l3-tag"></span><h2 id="l3-title"></h2><p id="l3-text"></p></div>
+    <canvas class="cv" id="l3-cv" width="720" height="360" style="cursor:crosshair"></canvas>
+    <div class="legend" id="l3-leg"></div>
+    <div id="l3-dist-row" style="display:none;margin:.5rem 0;gap:8px;flex-wrap:wrap" class="srow"></div>
+    <div class="hint" id="l3-hint"></div>
+    <div class="brow">
+      <button class="bhome" onclick="goHome()">⌂</button>
+      <button class="bback" id="l3-back" onclick="l3Prev()">←</button>
+      <button class="bnext" id="l3-next" onclick="l3Next()">Weiter</button>
+    </div>
+    <div class="cbanner" id="l3-done" style="display:none">
+      <h3 id="l3-dt"></h3>
+      <div class="cscore" id="l3-dscore"></div>
+      <p id="l3-dp"></p>
+      <p class="cunlock-note" id="l3-unlock-note" style="display:none"></p>
+      <button class="cnext" onclick="goLevel(4)" id="l3-db"></button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LEVEL 4 ══ -->
+<div class="screen" id="screen-l4">
+  <div class="topbar"><span class="logo">⬡ K-Means Lab</span><div class="lang-toggle"><button class="lang-btn active" onclick="setLang('de')">DE</button><button class="lang-btn" onclick="setLang('en')">EN</button></div></div>
+  <div class="lw">
+    <div class="sprog" id="l4-prog"></div>
+    <div class="icard"><span class="tag" id="l4-tag"></span><h2 id="l4-title"></h2><p id="l4-text"></p></div>
+    <div class="srow">
+      <div class="sc" id="l4-sc-it"><div class="sv" id="l4-it">0</div><div class="sl" id="l4-itl">Iteration</div></div>
+      <div class="sc" id="l4-sc-mv"><div class="sv" id="l4-mv">–</div><div class="sl" id="l4-mvl">Ø Bewegung</div></div>
+      <div class="sc" id="l4-sc-st"><div class="sv" id="l4-st">–</div><div class="sl" id="l4-stl">Status</div></div>
+    </div>
+    <canvas class="cv" id="l4-cv" width="720" height="360"></canvas>
+    <div class="legend" id="l4-leg"></div>
+    <div class="hint" id="l4-hint"></div>
+    <div class="brow">
+      <button class="bhome" onclick="goHome()">⌂</button>
+      <button class="bback" id="l4-back" onclick="l4Prev()">←</button>
+      <button class="bnext" id="l4-next" onclick="l4Next()">Nächste Iteration ▶</button>
+    </div>
+    <div class="brow" style="margin-top:.5rem">
+      <button id="l4-stop-btn" onclick="l4TryStop()" style="flex:1;padding:11px;font-size:14px;font-weight:600;border-radius:var(--rs);border:1px solid var(--teal);background:transparent;color:var(--teal-l);cursor:pointer;transition:all .2s;box-shadow:var(--glow-teal)" onmouseover="this.style.background='#1d9e7520'" onmouseout="this.style.background='transparent'">Ich bin fertig – konvergiert! ✓</button>
+    </div>
+    <div class="frow" id="l4-fb"></div>
+    <div class="cbanner" id="l4-done" style="display:none">
+      <h3 id="l4-dt"></h3>
+      <div class="cscore" id="l4-dscore"></div>
+      <p id="l4-dp"></p>
+      <button class="cnext" onclick="goHome()" id="l4-db"></button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// TRANSLATIONS
+// ═══════════════════════════════════════════════════
+const TX={
+de:{
+  selT:'Levelauswahl',selS:'Lerne K-Means Schritt für Schritt',
+  lvls:[
+    {n:'Einführung',d:'Einfach',dc:'de',s:'Video + Überblick'},
+    {n:'Geführter Algorithmus',d:'Einfach',dc:'de',s:'Schritt-für-Schritt'},
+    {n:'Punkte zuweisen',d:'Mittel',dc:'dm',s:'Interaktiv'},
+    {n:'Centroid setzen',d:'Mittel',dc:'dm',s:'Selbst platzieren'},
+    {n:'Freie Iteration',d:'Mittel',dc:'dm',s:'Konvergenz finden'},
+    {n:'Quiz',d:'Schwer',dc:'dh',s:'Wissen testen'},
+    {n:'Du entscheidest',d:'Schwer',dc:'dh',s:'Offene Aufgabe'},
+    {n:'Gegen die KI',d:'Schwer',dc:'dh',s:'Centroid-Battle'},
+    {n:'Freies Üben',d:'Schwer',dc:'dh',s:'Ohne Hilfe'},
+    {n:'ENDBOSS',d:'Boss',dc:'db',s:'Du bist der Centroid'},
+  ],
+  iTag:'Einführung',iTitle:'Bevor es losgeht: Was ist K-Means?',
+  iText:'Schau dir kurz dieses Video an – es erklärt die Grundidee visuell. Du kannst es auch überspringen und direkt starten.',
+  iHint:'Das Video ist optional – einfach auf "Level 1 starten" klicken.',
+  iBtn:'Level 1 starten →',vHint:'YouTube-URL einfügen oder hier klicken',
+  unlockAll:'🔓 Alle Level freischalten',unlockHint:'Für Fortgeschrittene – überspringt die Reihenfolge',
+  unlockConfirm:'Alle Level wurden freigeschaltet!',
+  reqNote:'Benötigt {p}% in Level {l}',
+  scoreLabel:'Dein Score',
+  notUnlocked:'Noch nicht freigeschaltet – du brauchst {p}% in Level {l}.',
+  l1steps:[
+    {tag:'Was ist K-Means?',tc:'ta',title:'Ziel des Algorithmus',text:'K-Means gruppiert Datenpunkte automatisch in k Cluster. Ähnliche Punkte landen in derselben Gruppe – ohne manuelles Labeln.',hint:'Drücke "Weiter" um zu starten.'},
+    {tag:'Schritt 1',tc:'ta',title:'Datenpunkte im Raum',text:'Hier siehst du 24 Datenpunkte im 2D-Raum. Jeder Punkt hat zwei Eigenschaften (x, y). Noch sind alle grau – sie gehören keinem Cluster an.',hint:'Kannst du bereits Gruppen erkennen?'},
+    {tag:'Schritt 2',tc:'ta',title:'Centroids zufällig setzen (k=3)',text:'Wir wählen k = 3. Drei Centroids ◆ werden zufällig platziert. Ein Centroid ist zunächst nur eine Schätzung für den Mittelpunkt eines Clusters.',hint:'Die Rauten ◆ sind die Centroids.'},
+    {tag:'Schritt 3',tc:'ta',title:'Zuweisung: Nächster Centroid gewinnt',text:'Jeder Punkt wird dem nächstgelegenen Centroid zugewiesen (euklidischer Abstand). Der Punkt bekommt dessen Farbe.',hint:'Beobachte die Linien zum Centroid.'},
+    {tag:'Schritt 4',tc:'ta',title:'Centroids neu berechnen',text:'Für jede Gruppe: Durchschnitt aller x- und y-Werte = neuer Mittelpunkt. Die Centroids wandern dorthin.',hint:'Gestrichelte Linien zeigen die Bewegung.'},
+    {tag:'Schritt 5',tc:'ti',title:'Wiederholen bis Konvergenz',text:'Zuweisung und Update wiederholen sich bis kein Punkt mehr die Gruppe wechselt. Klicke mehrmals auf "Nächste Iteration".',hint:'Beobachte wie sich die Cluster stabilisieren.'},
+    {tag:'Fertig!',tc:'ta',title:'K-Means hat konvergiert',text:'Kein Punkt wechselt mehr die Gruppe, kein Centroid bewegt sich. Das ist das Ergebnis von K-Means – automatisch gefundene Gruppen!',hint:''},
+  ],
+  l1next:['Los geht\'s!','Weiter','Centroids setzen','Punkte zuweisen','Centroids updaten','Nächste Iteration','Abschließen'],
+  l1leg:['Cluster A','Cluster B','Cluster C','Centroid','Nicht zugewiesen'],
+  l1sk:'k',l1sp:'Punkte',l1si:'Iteration',
+  l1ct:'Level 1 abgeschlossen! 🎉',l1cp:'Du kennst jetzt: Initialisieren → Zuweisen → Updaten.',l1cb:'Level 2 →',
+  l2steps:[
+    {tag:'Level 2 – Runde 1',tc:'ti',title:'Du bist dran: Punkte zuweisen',text:'Klicke auf jeden grauen Datenpunkt und weise ihn dem richtigen Cluster zu – dem Centroid ◆ dem er am nächsten ist.',hint:'Klicke auf einen grauen Punkt → wähle den Cluster.'},
+    {tag:'Level 2 – Runde 2',tc:'ti',title:'Schwieriger: Centroids in den Ecken',text:'Jetzt liegen die drei Centroids ◆ weit auseinander in den Ecken. Überlege genau: Welcher Punkt ist welchem Centroid näher? Miss die Distanz zu ALLEN drei!',hint:'Tipp: Nicht nur Nachbarpunkte zählen – schau alle drei Centroids an.'},
+    {tag:'Auswertung',tc:'tq',title:'Dein Ergebnis',text:'Die farbigen Hintergrundbereiche zeigen die korrekten Voronoi-Zellen. Grüner Ring = richtig, roter Ring = falsch.',hint:''},
+  ],
+  l2sel:'Welchem Cluster gehört dieser Punkt?',
+  l2cn:['Cluster A (Blau)','Cluster B (Koralle)','Cluster C (Grün)'],
+  l2sl:'/ {n} richtig',
+  l2ct:'Level 2 abgeschlossen! 🎉',l2cp:'Du hast den Zuweisungsschritt selbst durchgeführt.',l2cb:'Level 3 →',
+  l2ha:'Klicke auf einen grauen Punkt um ihn zuzuweisen.',l2hd:'Alle zugewiesen! Klicke auf "Weiter".',
+  l2fc:'✓ Richtig!',l2fw:'✗ Falsch – das war Cluster {c}.',
+  l3steps:[
+    {tag:'Level 3 – Runde 1',tc:'ti',title:'Setze die Centroids selbst',text:'Du siehst nur die Datenpunkte – ohne Centroids. Klicke an 3 Stellen wo du die Cluster-Mittelpunkte vermutest. Danach führt der Algorithmus K-Means durch.',hint:'Klicke 3× in den Graphen um Centroids zu setzen.'},
+    {tag:'Auswertung 1',tc:'tq',title:'Wie gut war deine Schätzung?',text:'Gestrichelte Linien zeigen wohin deine Centroids gewandert sind. Die Abstände zeigen wie nah du am echten Mittelpunkt warst.',hint:'Je kleiner der Abstand, desto besser die Initialisierung.'},
+    {tag:'Level 3 – Runde 2',tc:'ti',title:'Andere Verteilung – nochmal',text:'Neue Datenpunkte. Versuche die Cluster-Mittelpunkte diesmal noch genauer zu treffen!',hint:'Klicke 3× um deine Centroids zu setzen.'},
+    {tag:'Auswertung 2',tc:'tq',title:'Ergebnis Runde 2',text:'Schau auf die Abstände. Je kürzer die gestrichelten Linien, desto besser war deine Schätzung.',hint:''},
+    {tag:'Level 3 – Sabotage!',tc:'tq',title:'Jetzt absichtlich falsch setzen 😈',text:'Setze die 3 Centroids jetzt so SCHLECHT wie möglich – alle zusammen, weit weg von den Clustern. Sieh dann was der Algorithmus daraus macht!',hint:'Klicke 3× – diesmal absichtlich schlecht!'},
+    {tag:'Erkenntnis',tc:'tq',title:'Schlechte Initialisierung = schlechtes Ergebnis',text:'Siehst du? Wenn Centroids schlecht starten, konvergiert K-Means in ein falsches Ergebnis (lokales Minimum). Deshalb wiederholt man K-Means oft mehrfach und nimmt das beste Ergebnis.',hint:''},
+  ],
+  l3next:['Algorithmus starten','Weiter zu Runde 2','Algorithmus starten','Weiter zur Sabotage','Algorithmus sabotieren!','Abschließen'],
+  l3hp:'Klicke noch {r}× in den Graphen.',l3hd:'3 Centroids gesetzt! Klicke auf "Algorithmus starten".',
+  l3ct:'Level 3 abgeschlossen! 🎉',l3cp:'Die Wahl der Start-Centroids ist entscheidend – schlechte Startwerte = falsches Ergebnis!',l3cb:'Level 4 →',
+  l3dist:'Abstand vom echten Mittelpunkt',l3distUnit:'px',
+  l4steps:[
+    {tag:'Level 4 – Runde 1',tc:'ti',title:'Du steuerst: Klicke bis zur Konvergenz',text:'Drücke "Nächste Iteration" und beobachte Centroids und Cluster. Wenn du denkst der Algorithmus hat konvergiert, drücke "Ich bin fertig!". Achtung: Du siehst den Status nicht – beobachte die Ø Bewegung!',hint:'Beobachte den Ø Bewegung Wert – er sollte gegen 0 sinken.'},
+    {tag:'Auswertung 1',tc:'tq',title:'Runde 1 geschafft!',text:'Gut gemacht. In Runde 2 kommen mehr Punkte und schwierigere Startpositionen – und diesmal ohne die Ø Bewegung als Tipp!',hint:''},
+    {tag:'Level 4 – Runde 2',tc:'ti',title:'Ohne Hilfswerte – nur beobachten!',text:'Jetzt siehst du weder den Ø Bewegung Wert noch irgendeinen Hinweis. Beobachte nur die Centroids und Punkte. Entscheide durch Hinschauen wann konvergiert ist!',hint:'Schau ob die Centroids sich noch bewegen – dann bist du fertig.'},
+    {tag:'Konvergiert!',tc:'tq',title:'Level 4 abgeschlossen!',text:'Ø Bewegung ≈ 0 – kein Centroid bewegt sich mehr. Du hast K-Means in beiden Runden selbst erkannt!',hint:''},
+  ],
+  l4ni:'Nächste Iteration ▶',l4fin:'Weiter zu Runde 2 →',l4fin2:'Abschließen',
+  l4il:'Iteration',l4ml:'Ø Bewegung',l4sl:'Status',
+  l4sr:'?',l4ss:'?',
+  l4stop:'Ich bin fertig – konvergiert! ✓',
+  l4tooEarly:'Zu früh! Schau nochmal – die Centroids bewegen sich noch.',
+  l4scoreNote:'{it} Iterationen – Score: {s}%',
+  l4ct:'Level 4 abgeschlossen! 🎉',l4cp:'Du kannst K-Means vollständig durchführen und Konvergenz erkennen.',l4cb:'Zur Levelauswahl',
+},
+en:{
+  selT:'Level Selection',selS:'Learn K-Means step by step',
+  lvls:[
+    {n:'Introduction',d:'Easy',dc:'de',s:'Video + Overview'},
+    {n:'Guided Algorithm',d:'Easy',dc:'de',s:'Step by step'},
+    {n:'Assign Points',d:'Medium',dc:'dm',s:'Interactive'},
+    {n:'Place Centroids',d:'Medium',dc:'dm',s:'Place yourself'},
+    {n:'Free Iteration',d:'Medium',dc:'dm',s:'Find convergence'},
+    {n:'Quiz',d:'Hard',dc:'dh',s:'Test knowledge'},
+    {n:'You decide',d:'Hard',dc:'dh',s:'Open task'},
+    {n:'vs. AI',d:'Hard',dc:'dh',s:'Centroid battle'},
+    {n:'Free Practice',d:'Hard',dc:'dh',s:'No hints'},
+    {n:'FINAL BOSS',d:'Boss',dc:'db',s:'You are the centroid'},
+  ],
+  iTag:'Introduction',iTitle:'Before we start: What is K-Means?',
+  iText:'Watch this short video – it explains the core idea visually. You can also skip it and start directly.',
+  iHint:'The video is optional – just click "Start Level 1".',
+  iBtn:'Start Level 1 →',vHint:'Paste YouTube URL or click here',
+  unlockAll:'🔓 Unlock all levels',unlockHint:'For advanced users – skip the sequence',
+  unlockConfirm:'All levels have been unlocked!',
+  reqNote:'Requires {p}% in Level {l}',
+  scoreLabel:'Your score',
+  notUnlocked:'Not unlocked yet – you need {p}% in Level {l}.',
+  l1steps:[
+    {tag:'What is K-Means?',tc:'ta',title:'Goal of the algorithm',text:'K-Means automatically groups data points into k clusters. Similar points end up in the same group – without manual labeling.',hint:'Press "Next" to start.'},
+    {tag:'Step 1',tc:'ta',title:'Data points in space',text:'Here you see 24 data points in 2D space. Each point has two properties (x, y). For now all are gray – not assigned to any cluster.',hint:'Can you already spot groups?'},
+    {tag:'Step 2',tc:'ta',title:'Place centroids randomly (k=3)',text:'We choose k = 3. Three centroids ◆ are placed randomly as initial guesses.',hint:'The diamonds ◆ are the centroids.'},
+    {tag:'Step 3',tc:'ta',title:'Assignment: nearest centroid wins',text:'Each point is assigned to its closest centroid (Euclidean distance) and takes its color.',hint:'Observe the lines to each centroid.'},
+    {tag:'Step 4',tc:'ta',title:'Recalculate centroids',text:'For each group: average of all x and y values = new center. The centroids move there.',hint:'Dashed lines show the movement.'},
+    {tag:'Step 5',tc:'ti',title:'Repeat until convergence',text:'Assignment and update repeat until no point switches group. Click "Next Iteration" multiple times.',hint:'Watch how clusters stabilize.'},
+    {tag:'Done!',tc:'ta',title:'K-Means has converged',text:'No point switches groups, no centroid moves. This is the result of K-Means!',hint:''},
+  ],
+  l1next:['Let\'s go!','Next','Place centroids','Assign points','Update centroids','Next Iteration','Finish'],
+  l1leg:['Cluster A','Cluster B','Cluster C','Centroid','Unassigned'],
+  l1sk:'k',l1sp:'Points',l1si:'Iteration',
+  l1ct:'Level 1 complete! 🎉',l1cp:'You now know: Initialize → Assign → Update.',l1cb:'Level 2 →',
+  l2steps:[
+    {tag:'Level 2 – Round 1',tc:'ti',title:'Your turn: Assign points',text:'Click on each gray data point and assign it to the correct cluster – the nearest centroid ◆.',hint:'Click a gray point → choose the cluster.'},
+    {tag:'Level 2 – Round 2',tc:'ti',title:'Harder: Centroids in the corners',text:'Now the three centroids ◆ are far apart in the corners. Think carefully: which point is closer to which centroid? Measure distance to ALL three!',hint:'Tip: Don\'t just look at neighbors – check all three centroids.'},
+    {tag:'Evaluation',tc:'tq',title:'Your result',text:'Colored background areas show the correct Voronoi cells. Green ring = correct, red ring = wrong.',hint:''},
+  ],
+  l2sel:'Which cluster does this point belong to?',
+  l2cn:['Cluster A (Blue)','Cluster B (Coral)','Cluster C (Green)'],
+  l2sl:'/ {n} correct',
+  l2ct:'Level 2 complete! 🎉',l2cp:'You performed the assignment step yourself.',l2cb:'Level 3 →',
+  l2ha:'Click on a gray point to assign it.',l2hd:'All assigned! Click "Next".',
+  l2fc:'✓ Correct!',l2fw:'✗ Wrong – that was Cluster {c}.',
+  l3steps:[
+    {tag:'Level 3 – Round 1',tc:'ti',title:'Place the centroids yourself',text:'You only see data points. Click 3 spots where you think the cluster centers are. Then the algorithm runs K-Means from your starting points.',hint:'Click 3× on the graph to place centroids.'},
+    {tag:'Evaluation 1',tc:'tq',title:'How good was your estimate?',text:'Dashed lines show where your centroids moved to. The distances show how close you were to the true center.',hint:'Smaller distance = better initialization.'},
+    {tag:'Level 3 – Round 2',tc:'ti',title:'Different distribution – place again',text:'New data, new challenge. Try to hit the cluster centers even more accurately!',hint:'Click 3× to place your centroids.'},
+    {tag:'Evaluation 2',tc:'tq',title:'Result Round 2',text:'Check the distances. Shorter dashed lines = better initial guess.',hint:''},
+    {tag:'Level 3 – Sabotage!',tc:'tq',title:'Now place them as BADLY as possible 😈',text:'Place all 3 centroids as POORLY as possible – all together, far from any cluster. Then see what the algorithm does with bad initialization!',hint:'Click 3× – intentionally bad this time!'},
+    {tag:'Insight',tc:'tq',title:'Bad initialization = bad result',text:'See that? When centroids start badly, K-Means converges to the wrong result (local minimum). That\'s why K-Means is often run multiple times and the best result is kept.',hint:''},
+  ],
+  l3next:['Start algorithm','Continue to Round 2','Start algorithm','Continue to Sabotage','Sabotage the algorithm!','Finish'],
+  l3hp:'Click {r} more time(s) on the graph.',l3hd:'3 centroids placed! Click "Start algorithm".',
+  l3ct:'Level 3 complete! 🎉',l3cp:'Starting centroid choice is crucial – bad starts = wrong result!',l3cb:'Level 4 →',
+  l3dist:'Distance from true center',l3distUnit:'px',
+  l4steps:[
+    {tag:'Level 4',tc:'ti',title:'You control it: Click until convergence',text:'Press "Next Iteration" and watch centroids and clusters change. Decide yourself when it\'s done – when nothing changes! The earlier you stop correctly, the more points you get.',hint:'Watch the avg movement value sink towards 0.'},
+    {tag:'Converged!',tc:'tq',title:'Algorithm has converged',text:'Avg movement ≈ 0 – no centroid moves anymore. You identified convergence yourself. That\'s the heart of K-Means!',hint:''},
+  ],
+  l4ni:'Next Iteration ▶',l4fin:'Finish',
+  l4il:'Iteration',l4ml:'Avg movement',l4sl:'Status',
+  l4sr:'running…',l4ss:'converged ✓',
+  l4stop:'I\'m done – converged!',
+  l4tooEarly:'Too early! Avg movement is still {m} – not converged yet.',
+  l4scoreNote:'Score: {s}% – {it} iterations to convergence',
+  l4ct:'Level 4 complete! 🎉',l4cp:'You can now run K-Means fully and recognize convergence.',l4cb:'Back to levels',
+}
+};
+
+// ═══════════════════════════════════════════════════
+// UNLOCK / SCORE SYSTEM
+// ═══════════════════════════════════════════════════
+// Scores: [intro, l1, l2, l3, l4]
+// Score is 0–100 (percentage). -1 = not attempted.
+let scores=[-1,-1,-1,-1,-1];
+// Which levels are currently unlocked
+let UNLOCKED=new Set([0,1]); // intro + level 1 always open
+
+// Requirements to unlock next level (minScore%)
+const REQS={
+  2:{level:1,pct:80},  // need 80% on L1 to unlock L2
+  3:{level:2,pct:75},  // need 75% on L2 to unlock L3
+  4:{level:3,pct:70},  // need 70% on L3 to unlock L4
+};
+
+function tryUnlock(lvl){
+  const req=REQS[lvl];
+  if(!req)return true;
+  if(UNLOCKED.has(lvl))return true;
+  if(scores[req.level]>=req.pct){UNLOCKED.add(lvl);return true;}
+  return false;
+}
+function isUnlocked(lvl){return UNLOCKED.has(lvl);}
+function saveScore(lvl,pct){
+  scores[lvl]=pct;
+  // Auto-try to unlock next
+  for(let i=1;i<=4;i++)tryUnlock(i);
+}
+function unlockAll(){
+  for(let i=0;i<=9;i++)UNLOCKED.add(i);
+  renderSelect();
+  showToast(TX[lang].unlockConfirm,'teal');
+}
+function showToast(msg,color='coral'){
+  document.querySelectorAll('.req-toast').forEach(e=>e.remove());
+  const t=document.createElement('div');
+  t.className='req-toast';
+  t.style.borderColor=color==='teal'?'var(--teal)':'var(--coral)';
+  t.style.color=color==='teal'?'var(--teal-l)':'var(--coral-l)';
+  t.style.boxShadow=color==='teal'?'var(--glow-teal)':'var(--glow-coral)';
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),3200);
+}
+
+// ═══════════════════════════════════════════════════
+// COLOURS & UTILS
+// ═══════════════════════════════════════════════════
+const C=[
+  {f:'#378add',s:'#0C447C',bg:'#0c447c28'},
+  {f:'#d85a30',s:'#712B13',bg:'#71251328'},
+  {f:'#1d9e75',s:'#085041',bg:'#08504128'},
+];
+const GR='#5a5a78';
+
+function clamp(v,a,b){return Math.min(b,Math.max(a,v));}
+function rand(a,b){return a+Math.random()*(b-a);}
+function toXY(nx,ny,w,h,p=26){return[p+nx*(w-p*2),p+ny*(h-p*2)];}
+function fromXY(px,py,w,h,p=26){return[(px-p)/(w-p*2),(py-p)/(h-p*2)];}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+function genPts(centers,spread,n){
+  return Array.from({length:n},(_,i)=>{
+    const c=centers[i%centers.length];
+    return{x:clamp(c[0]+rand(-.5,.5)*spread,.04,.96),y:clamp(c[1]+rand(-.5,.5)*spread,.04,.96),cluster:-1};
+  });
+}
+function assign(pts,cens){
+  pts.forEach(p=>{let best=0,md=Infinity;cens.forEach((c,i)=>{const d=dist(p,c);if(d<md){md=d;best=i;}});p.cluster=best;});
+}
+function updateCens(pts,cens){
+  const prev=cens.map(c=>({...c}));
+  const nc=cens.map((_,i)=>{
+    const g=pts.filter(p=>p.cluster===i);
+    if(!g.length)return cens[i];
+    return{x:g.reduce((s,p)=>s+p.x,0)/g.length,y:g.reduce((s,p)=>s+p.y,0)/g.length};
+  });
+  return{prev,nc,moved:nc.reduce((s,c,i)=>s+dist(c,prev[i]),0)/nc.length};
+}
+
+// ─── DRAW ENGINE ───
+function drawScene(cvId,pts,cens,opts={}){
+  const cv=document.getElementById(cvId);
+  if(!cv)return;
+  const ctx=cv.getContext('2d');
+  const w=cv.width,h=cv.height;
+  ctx.clearRect(0,0,w,h);
+
+  if(opts.voronoi){
+    const step=5;
+    for(let px=0;px<w;px+=step)for(let py=0;py<h;py+=step){
+      const[nx,ny]=fromXY(px,py,w,h);
+      let best=0,md=Infinity;
+      cens.forEach((c,i)=>{const d=Math.hypot(nx-c.x,ny-c.y);if(d<md){md=d;best=i;}});
+      ctx.fillStyle=C[best].f+'18';ctx.fillRect(px,py,step,step);
+    }
+  }
+  if(opts.lines&&opts.assigned){
+    pts.forEach(p=>{
+      if(p.cluster<0)return;
+      const[px,py]=toXY(p.x,p.y,w,h);const[cx,cy]=toXY(cens[p.cluster].x,cens[p.cluster].y,w,h);
+      ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(cx,cy);
+      ctx.strokeStyle=C[p.cluster].f+'33';ctx.lineWidth=1;ctx.stroke();
+    });
+  }
+  if(opts.prev){
+    opts.prev.forEach((pc,i)=>{
+      const[px,py]=toXY(pc.x,pc.y,w,h);const[cx,cy]=toXY(cens[i].x,cens[i].y,w,h);
+      ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(cx,cy);
+      ctx.strokeStyle=C[i].s+'bb';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
+    });
+  }
+  pts.forEach((p,idx)=>{
+    const[px,py]=toXY(p.x,p.y,w,h);
+    const col=(opts.assigned&&p.cluster>=0)?C[p.cluster].f:GR;
+    const sel=opts.selected===idx;
+    if(opts.evalRings&&p.cluster>=0){
+      ctx.beginPath();ctx.arc(px,py,13,0,Math.PI*2);
+      ctx.strokeStyle=p.cluster===p.correct?C[1].s:C[0].s;ctx.lineWidth=2;ctx.stroke();
+    }
+    // Glow for assigned points
+    if(opts.assigned&&p.cluster>=0){
+      ctx.beginPath();ctx.arc(px,py,11,0,Math.PI*2);
+      ctx.fillStyle=C[p.cluster].f+'18';ctx.fill();
+    }
+    ctx.beginPath();ctx.arc(px,py,sel?10:7,0,Math.PI*2);
+    ctx.fillStyle=col+(opts.assigned&&p.cluster>=0?'dd':'88');ctx.fill();
+    ctx.strokeStyle=sel?'#fff':col;ctx.lineWidth=sel?2.5:1.5;ctx.stroke();
+  });
+  if(opts.showC){
+    cens.forEach((c,i)=>{
+      const[cx,cy]=toXY(c.x,c.y,w,h);const s=11;
+      // Glow halo
+      ctx.beginPath();ctx.arc(cx,cy,20,0,Math.PI*2);
+      ctx.fillStyle=C[i].f+'15';ctx.fill();
+      ctx.save();ctx.translate(cx,cy);ctx.rotate(Math.PI/4);
+      ctx.fillStyle=C[i].bg;ctx.strokeStyle=C[i].s;ctx.lineWidth=2.5;
+      ctx.shadowColor=C[i].f;ctx.shadowBlur=10;
+      ctx.fillRect(-s,-s,s*2,s*2);ctx.strokeRect(-s,-s,s*2,s*2);
+      ctx.restore();
+      ctx.fillStyle=C[i].f;ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+      ctx.fillText('C'+(i+1),cx,cy-17);
+    });
+  }
+}
+
+function makeLegend(elId,showC,showA,unassLbl,cLbl,cNames){
+  let h='';
+  if(showA)C.forEach((c,i)=>h+=`<div class="li"><div class="ld" style="background:${c.f};border-color:${c.s};box-shadow:0 0 5px ${c.f}66"></div>${cNames[i]}</div>`);
+  else h+=`<div class="li"><div class="ld" style="background:${GR};border-color:${GR}"></div>${unassLbl}</div>`;
+  if(showC)h+=`<div class="li"><div style="width:11px;height:11px;background:var(--bg3);border:2px solid var(--text);transform:rotate(45deg);flex-shrink:0;box-shadow:0 0 6px var(--purple-l)"></div>&nbsp;${cLbl}</div>`;
+  document.getElementById(elId).innerHTML=h;
+}
+
+// ═══════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+id).classList.add('active');
+  window.scrollTo(0,0);
+}
+function goHome(){show('select');renderSelect();}
+function goLevel(n){
+  if(!isUnlocked(n)){
+    const req=REQS[n];
+    if(req){
+      const msg=TX[lang].notUnlocked.replace('{p}',req.pct).replace('{l}',req.level);
+      showToast(msg,'coral');
+    }
+    return;
+  }
+  if(n===0){show('intro');renderIntro();}
+  else if(n===1){l1Step=0;l1Iter=0;l1Reset();show('l1');l1Render();}
+  else if(n===2){l2Step=0;l2Score=0;l2R1Score=0;l2R2Score=0;l2GenData(0);show('l2');l2Render();}
+  else if(n===3){l3Step=0;l3Round=0;l3Reset(0);show('l3');l3Render();}
+  else if(n===4){l4Step=0;l4Iter=0;l4Reset();show('l4');l4Render();}
+}
+
+function setLang(l){
+  lang=l;
+  document.querySelectorAll('.lang-btn').forEach(b=>b.classList.toggle('active',b.textContent===l.toUpperCase()));
+  renderSelect();
+  const cur=document.querySelector('.screen.active').id.replace('screen-','');
+  if(cur==='intro')renderIntro();
+  else if(cur==='l1')l1Render();
+  else if(cur==='l2')l2Render();
+  else if(cur==='l3')l3Render();
+  else if(cur==='l4')l4Render();
+}
+let lang='de';
+
+// ═══════════════════════════════════════════════════
+// LEVEL SELECT
+// ═══════════════════════════════════════════════════
+function renderSelect(){
+  const t=TX[lang];
+  document.getElementById('sel-title').textContent=t.selT;
+  document.getElementById('sel-sub').textContent=t.selS;
+  document.getElementById('unlock-all-btn').textContent=t.unlockAll;
+  document.getElementById('unlock-hint').textContent=t.unlockHint;
+  document.getElementById('lvl-grid').innerHTML=t.lvls.map((lv,i)=>{
+    const locked=!isUnlocked(i);
+    const done=scores[i]>=0;
+    const pct=done?scores[i]:0;
+    const req=REQS[i];
+    const reqStr=req?`<span class="req">${t.reqNote.replace('{p}',req.pct).replace('{l}',req.level)}</span>`:'';
+    const scoreStr=done?`<span style="font-size:11px;color:var(--teal-l);font-weight:600">${Math.round(pct)}%</span>`:'';
+    return `<div class="lvl-card${locked?' locked':''}${done&&!locked?' completed':''}" onclick="${locked?'':'levelClick('+i+')'}">
+      ${locked?`<span class="lock">🔒</span>`:''}
+      <div class="lnum">Level ${i===0?'0':i} ${scoreStr}</div>
+      <div class="lname">${lv.n}</div>
+      <span class="ldiff ${lv.dc}">${lv.d}</span>
+      <div class="ldesc">${lv.s}</div>
+      <div class="lbar"><div class="lfill" style="width:${pct}%;background:${pct>=80?'var(--teal)':pct>0?'var(--purple)':'var(--border)'}"></div></div>
+      ${locked?reqStr:''}
+    </div>`;
+  }).join('');
+}
+function levelClick(i){goLevel(i);}
+
+// ═══════════════════════════════════════════════════
+// INTRO
+// ═══════════════════════════════════════════════════
+function renderIntro(){
+  const t=TX[lang];
+  document.getElementById('i-tag').textContent=t.iTag;
+  document.getElementById('i-title').textContent=t.iTitle;
+  document.getElementById('i-text').textContent=t.iText;
+  document.getElementById('i-hint').textContent=t.iHint;
+  document.getElementById('i-btn').textContent=t.iBtn;
+  document.getElementById('vph-text').textContent=t.vHint;
+  document.getElementById('vurl-input').placeholder=t.vHint;
+}
+function completeIntro(){saveScore(0,100);goLevel(1);}
+function ytId(url){const m=url.match(/(?:youtu\.be\/|v=|embed\/)([A-Za-z0-9_-]{11})/);return m?m[1]:null;}
+function loadVideo(){
+  const id=ytId(document.getElementById('vurl-input').value.trim());
+  if(!id){alert(lang==='de'?'Keine gültige YouTube-URL':'Invalid YouTube URL');return;}
+  document.getElementById('vcontainer').innerHTML=`<iframe src="https://www.youtube-nocookie.com/embed/${id}?rel=0" allowfullscreen></iframe>`;
+}
+function promptVideo(){
+  const u=prompt(lang==='de'?'YouTube URL:':'YouTube URL:','');
+  if(u){document.getElementById('vurl-input').value=u;loadVideo();}
+}
+
+// ═══════════════════════════════════════════════════
+// LEVEL 1
+// ═══════════════════════════════════════════════════
+let l1Step=0,l1Iter=0,l1Pts=[],l1C=[];
+const L1_CI=[{x:.2,y:.55},{x:.63,y:.58},{x:.74,y:.15}];
+function l1Reset(){l1Pts=genPts([[.22,.27],[.72,.23],[.48,.75]],0.27,24);l1C=L1_CI.map(c=>({...c}));l1Iter=0;}
+function prog(el,total,cur){
+  document.getElementById(el).innerHTML=Array.from({length:total},(_,i)=>
+    `<div class="sdot ${i<cur?'done':i===cur?'cur':''}"></div>`).join('');
+}
+function l1Render(){
+  const t=TX[lang];const s=t.l1steps[l1Step];
+  document.getElementById('l1-tag').textContent=s.tag;
+  document.getElementById('l1-tag').className='tag '+s.tc;
+  document.getElementById('l1-title').textContent=s.title;
+  document.getElementById('l1-text').textContent=s.text;
+  document.getElementById('l1-hint').textContent=s.hint;
+  document.getElementById('l1-next').textContent=t.l1next[l1Step];
+  document.getElementById('l1-back').disabled=l1Step===0;
+  document.getElementById('l1-next').disabled=false;
+  document.getElementById('l1-stats').style.display=l1Step>=1?'flex':'none';
+  document.getElementById('l1-skl').textContent=t.l1sk;
+  document.getElementById('l1-spl').textContent=t.l1sp;
+  document.getElementById('l1-sil').textContent=t.l1si;
+  document.getElementById('l1-sit').textContent=l1Iter;
+  document.getElementById('l1-done').style.display='none';
+  prog('l1-prog',t.l1steps.length,l1Step);
+  const leg=()=>makeLegend('l1-leg',l1Step>=2,l1Step>=3,t.l1leg[4],'Centroid',t.l1leg);
+  if(l1Step===0){drawScene('l1-cv',l1Pts,l1C,{});leg();}
+  else if(l1Step===1){drawScene('l1-cv',l1Pts,l1C,{});leg();}
+  else if(l1Step===2){drawScene('l1-cv',l1Pts,l1C,{showC:true});leg();}
+  else if(l1Step===3){assign(l1Pts,l1C);drawScene('l1-cv',l1Pts,l1C,{showC:true,assigned:true,lines:true});leg();}
+  else if(l1Step===4){const r=updateCens(l1Pts,l1C);l1C=r.nc;l1Iter++;document.getElementById('l1-sit').textContent=l1Iter;drawScene('l1-cv',l1Pts,l1C,{showC:true,assigned:true,prev:r.prev});leg();}
+  else if(l1Step===5){drawScene('l1-cv',l1Pts,l1C,{showC:true,assigned:true});leg();}
+  else if(l1Step===6){
+    drawScene('l1-cv',l1Pts,l1C,{showC:true,assigned:true});leg();
+    // L1 is guided – completing all steps = 100%
+    const sc=100;
+    saveScore(1,sc);
+    const t2=TX[lang];
+    document.getElementById('l1-dt').textContent=t2.l1ct;
+    document.getElementById('l1-dscore').textContent=sc+'%';
+    document.getElementById('l1-dp').textContent=t2.l1cp;
+    document.getElementById('l1-db').textContent=t2.l1cb;
+    document.getElementById('l1-db').disabled=!isUnlocked(2);
+    const un=document.getElementById('l1-unlock-note');
+    if(!isUnlocked(2)){un.style.display='block';un.textContent=t2.notUnlocked.replace('{p}',REQS[2].pct).replace('{l}',1);}
+    else{un.style.display='none';}
+    document.getElementById('l1-done').style.display='block';
+  }
+}
+function l1Next(){
+  if(l1Step===5){
+    const r=updateCens(l1Pts,l1C);const prev=r.prev;l1C=r.nc;
+    assign(l1Pts,l1C);l1Iter++;document.getElementById('l1-sit').textContent=l1Iter;
+    drawScene('l1-cv',l1Pts,l1C,{showC:true,assigned:true,prev});
+    if(l1Iter>=3){l1Step=6;l1Render();}
+    return;
+  }
+  if(l1Step<TX[lang].l1steps.length-1){l1Step++;l1Render();}
+}
+function l1Prev(){if(l1Step>0){if(l1Step<=4)l1Reset();l1Step--;l1Render();}}
+
+// ═══════════════════════════════════════════════════
+// LEVEL 2
+// ═══════════════════════════════════════════════════
+let l2Step=0,l2Score=0,l2Pts=[],l2C=[],l2Sel=null,l2R1Score=0,l2R2Score=0,l2Total=0;
+const L2_R1={C:[{x:.15,y:.18},{x:.82,y:.15},{x:.5,y:.85}],centers:[[.15,.18],[.82,.15],[.5,.85]],spread:.22};
+// R2: centroids in corners, points spread all over with guaranteed spacing
+const L2_R2={C:[{x:.1,y:.1},{x:.9,y:.15},{x:.5,y:.92}]};
+
+// Generate points with minimum distance between them to avoid overlap
+function genPtsSpaced(centers,spread,n,minDistNorm){
+  const pts=[];
+  let tries=0;
+  while(pts.length<n&&tries<2000){
+    tries++;
+    const ci=pts.length%centers.length;
+    const c=centers[ci];
+    const p={x:clamp(c[0]+rand(-.5,.5)*spread,.06,.94),y:clamp(c[1]+rand(-.5,.5)*spread,.06,.94)};
+    // Check minimum distance to existing points
+    const tooClose=pts.some(q=>Math.hypot(p.x-q.x,p.y-q.y)<minDistNorm);
+    if(!tooClose)pts.push({...p,cluster:-1});
+  }
+  return pts;
+}
+// For R2: generate evenly spread points across whole canvas with spacing
+function genR2Points(cens,n,minDistNorm){
+  const pts=[];let tries=0;
+  while(pts.length<n&&tries<3000){
+    tries++;
+    const p={x:rand(.06,.94),y:rand(.06,.94)};
+    const tooClose=pts.some(q=>Math.hypot(p.x-q.x,p.y-q.y)<minDistNorm);
+    if(!tooClose)pts.push({...p,cluster:-1,correct:-1});
+  }
+  return pts;
+}
+
+function l2GenData(round){
+  if(round===0){
+    const ds=L2_R1;
+    l2C=ds.C.map(c=>({...c}));
+    // minDist 0.09 normalised ≈ ~60px on 680px canvas → no overlap for r=7px points
+    l2Pts=genPtsSpaced(ds.centers,ds.spread,24,0.09);
+  }else{
+    l2C=L2_R2.C.map(c=>({...c}));
+    // Spread 24 pts across whole canvas, min distance 0.1 normalised ≈ ~68px
+    l2Pts=genR2Points(l2C,24,0.1);
+  }
+  // Recompute correct cluster from nearest centroid
+  l2Pts.forEach(p=>{let best=0,md=Infinity;l2C.forEach((c,i)=>{const d=dist(p,c);if(d<md){md=d;best=i;}});p.correct=best;});
+  l2Pts.sort(()=>Math.random()-.5);
+  l2Sel=null;l2Score=0;l2Total=l2Pts.length;
+}
+function l2Render(){
+  const t=TX[lang];const s=t.l2steps[l2Step];
+  document.getElementById('l2-tag').textContent=s.tag;document.getElementById('l2-tag').className='tag '+s.tc;
+  document.getElementById('l2-title').textContent=s.title;document.getElementById('l2-text').textContent=s.text;
+  document.getElementById('l2-done').style.display='none';document.getElementById('l2-fb').innerHTML='';
+  prog('l2-prog',t.l2steps.length,l2Step);
+  const showScore=l2Step<2;
+  document.getElementById('l2-score').style.display=showScore?'flex':'none';
+  document.getElementById('l2-sn').textContent=l2Score;
+  document.getElementById('l2-sl').textContent=t.l2sl.replace('{n}',l2Total);
+  const allDone=l2Pts.every(p=>p.cluster>=0);
+  if(l2Step<2){
+    document.getElementById('l2-hint').textContent=allDone?t.l2hd:t.l2ha;
+    document.getElementById('l2-next').disabled=!allDone;
+    document.getElementById('l2-next').textContent=lang==='de'?'Weiter':'Next';
+  }else{
+    document.getElementById('l2-hint').textContent=s.hint;
+    document.getElementById('l2-next').disabled=false;
+    document.getElementById('l2-next').textContent=lang==='de'?'Abschließen':'Finish';
+    // Show score banner
+    const combined=Math.round((l2R1Score+l2R2Score)/(2*l2Total)*100)||0;
+    saveScore(2,combined);
+    document.getElementById('l2-dt').textContent=t.l2ct;
+    document.getElementById('l2-dscore').textContent=combined+'%';
+    document.getElementById('l2-dp').textContent=t.l2cp;
+    document.getElementById('l2-db').textContent=t.l2cb;
+    document.getElementById('l2-db').disabled=!isUnlocked(3);
+    const un=document.getElementById('l2-unlock-note');
+    if(!isUnlocked(3)){un.style.display='block';un.textContent=t.notUnlocked.replace('{p}',REQS[3].pct).replace('{l}',2);}
+    else un.style.display='none';
+    document.getElementById('l2-done').style.display='block';
+  }
+  document.getElementById('l2-back').disabled=l2Step===0;
+  drawScene('l2-cv',l2Pts,l2C,{showC:true,assigned:true,lines:allDone,voronoi:l2Step===2,evalRings:l2Step===2,selected:l2Sel});
+  makeLegend('l2-leg',true,true,t.l1leg[4],'Centroid',t.l2cn);
+}
+function l2CanvasClick(e){
+  if(l2Step>=2)return;
+  const cv=document.getElementById('l2-cv');const r=cv.getBoundingClientRect();
+  const sx=cv.width/r.width,sy=cv.height/r.height;
+  const mx=(e.clientX-r.left)*sx,my=(e.clientY-r.top)*sy;
+  let hit=-1;
+  l2Pts.forEach((p,i)=>{const[px,py]=toXY(p.x,p.y,cv.width,cv.height);if(Math.hypot(mx-px,my-py)<14)hit=i;});
+  if(hit<0)return;
+  if(l2Pts[hit].cluster>=0){l2Sel=hit;drawScene('l2-cv',l2Pts,l2C,{showC:true,assigned:true,selected:l2Sel});return;}
+  l2Sel=hit;drawScene('l2-cv',l2Pts,l2C,{showC:true,assigned:true,selected:l2Sel});
+  showPicker(hit,e.clientX,e.clientY);
+}
+function showPicker(idx,cx,cy){
+  document.getElementById('l2-picker')?.remove();
+  const t=TX[lang];const pk=document.createElement('div');pk.id='l2-picker';
+  pk.style.cssText=`position:fixed;z-index:999;background:var(--card);border:1px solid var(--border2);border-radius:var(--r);padding:8px;display:flex;flex-direction:column;gap:4px;box-shadow:0 8px 32px #00000099,var(--glow-purple);left:${Math.min(cx+10,window.innerWidth-200)}px;top:${Math.min(cy-20,window.innerHeight-150)}px`;
+  pk.innerHTML=`<div style="font-size:11px;color:var(--muted);padding:0 2px;margin-bottom:2px">${t.l2sel}</div>`+
+    C.map((c,i)=>`<button onclick="l2Assign(${idx},${i})" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--rs);border:1px solid ${c.f}44;background:${c.f}18;color:${c.f};font-size:13px;font-weight:600;cursor:pointer;transition:all .15s" onmouseover="this.style.background='${c.f}30'" onmouseout="this.style.background='${c.f}18'">
+      <div style="width:10px;height:10px;border-radius:50%;background:${c.f};box-shadow:0 0 6px ${c.f}"></div>${t.l2cn[i]}</button>`).join('')+
+    `<button onclick="closePicker()" style="font-size:12px;color:var(--muted);background:none;border:none;padding:4px;cursor:pointer">${lang==='de'?'Abbrechen':'Cancel'}</button>`;
+  document.body.appendChild(pk);
+  setTimeout(()=>document.addEventListener('click',outsideClose,true),80);
+}
+function outsideClose(e){const pk=document.getElementById('l2-picker');if(pk&&!pk.contains(e.target)){pk.remove();document.removeEventListener('click',outsideClose,true);}}
+function closePicker(){document.getElementById('l2-picker')?.remove();document.removeEventListener('click',outsideClose,true);}
+function l2Assign(idx,cluster){
+  closePicker();
+  const t=TX[lang];const p=l2Pts[idx];const ok=p.correct===cluster;
+  p.cluster=cluster;l2Sel=null;
+  if(ok){l2Score++;document.getElementById('l2-sn').textContent=l2Score;}
+  const fb=document.getElementById('l2-fb');const names=['A','B','C'];
+  fb.innerHTML=`<span class="fmsg ${ok?'fok':'fbad'}">${ok?t.l2fc:t.l2fw.replace('{c}',names[p.correct])}</span>`;
+  setTimeout(()=>{fb.innerHTML='';},1800);
+  const allDone=l2Pts.every(p=>p.cluster>=0);
+  if(allDone){document.getElementById('l2-hint').textContent=t.l2hd;document.getElementById('l2-next').disabled=false;}
+  drawScene('l2-cv',l2Pts,l2C,{showC:true,assigned:true,lines:allDone});
+}
+function l2Next(){
+  if(l2Step===0){l2R1Score=l2Score;l2Step=1;l2GenData(1);l2Render();}
+  else if(l2Step===1){l2R2Score=l2Score;l2Step=2;l2Render();}
+  else goHome();
+}
+function l2Prev(){if(l2Step===0)return;l2Step--;l2GenData(l2Step===0?0:1);l2Render();}
+
+// ═══════════════════════════════════════════════════
+// LEVEL 3
+// ═══════════════════════════════════════════════════
+let l3Step=0,l3Round=0,l3Pts=[],l3C=[],l3UserC=[],l3FinalC=[],l3IsSabotage=false;
+const L3_DATA=[
+  {centers:[[.2,.2],[.78,.2],[.5,.82]],spread:.2},
+  {centers:[[.15,.75],[.82,.72],[.48,.15]],spread:.18},
+];
+function l3Reset(round){
+  const d=L3_DATA[Math.min(round,1)];
+  l3Pts=genPts(d.centers,d.spread,24);l3Pts.forEach(p=>p.cluster=-1);
+  l3UserC=[];l3C=[];l3FinalC=[];
+}
+function l3DistPx(uc,fc,cvW){return Math.round(dist(uc,fc)*(cvW-52));}
+function l3ShowDistRow(show,cvW){
+  const row=document.getElementById('l3-dist-row');
+  if(!show||!l3UserC.length){row.style.display='none';return;}
+  const t=TX[lang];
+  row.style.display='flex';
+  row.innerHTML=l3UserC.map((uc,i)=>{
+    if(!l3FinalC[i])return'';
+    const px=l3DistPx(uc,l3FinalC[i],cvW);
+    const pct=Math.round(dist(uc,l3FinalC[i])*100);
+    const color=pct<8?'var(--teal-l)':pct<18?'var(--amber-l)':'var(--coral-l)';
+    return `<div class="sc" style="border-color:${C[i].f}55;flex:1">
+      <div class="sv" style="color:${color};font-size:15px">${px}px</div>
+      <div class="sl">C${i+1} – ${t.l3dist}</div>
+    </div>`;
+  }).join('');
+}
+function l3DrawPlacing(){
+  const cv=document.getElementById('l3-cv');const ctx=cv.getContext('2d');
+  ctx.clearRect(0,0,cv.width,cv.height);
+  // subtle grid dots
+  ctx.fillStyle=GR+'44';
+  for(let gx=0.1;gx<1;gx+=0.1)for(let gy=0.1;gy<1;gy+=0.1){
+    const[px,py]=toXY(gx,gy,cv.width,cv.height);
+    ctx.beginPath();ctx.arc(px,py,2,0,Math.PI*2);ctx.fill();
+  }
+  l3Pts.forEach(p=>{
+    const[px,py]=toXY(p.x,p.y,cv.width,cv.height);
+    ctx.beginPath();ctx.arc(px,py,7,0,Math.PI*2);ctx.fillStyle=GR+'88';ctx.fill();ctx.strokeStyle=GR;ctx.lineWidth=1.5;ctx.stroke();
+  });
+  l3UserC.forEach((c,i)=>{
+    const[cx2,cy2]=toXY(c.x,c.y,cv.width,cv.height);const s2=11;
+    ctx.save();ctx.translate(cx2,cy2);ctx.rotate(Math.PI/4);
+    ctx.shadowColor=C[i].f;ctx.shadowBlur=12;
+    ctx.fillStyle=C[i].bg;ctx.strokeStyle=C[i].s;ctx.lineWidth=2.5;
+    ctx.fillRect(-s2,-s2,s2*2,s2*2);ctx.strokeRect(-s2,-s2,s2*2,s2*2);
+    ctx.restore();ctx.shadowBlur=0;
+    ctx.fillStyle=C[i].f;ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText('C'+(i+1),cx2,cy2-17);
+  });
+}
+function l3Render(){
+  const t=TX[lang];const s=t.l3steps[l3Step];
+  document.getElementById('l3-tag').textContent=s.tag;document.getElementById('l3-tag').className='tag '+s.tc;
+  document.getElementById('l3-title').textContent=s.title;document.getElementById('l3-text').textContent=s.text;
+  document.getElementById('l3-done').style.display='none';
+  prog('l3-prog',t.l3steps.length,l3Step);
+  const placing=l3Step===0||l3Step===2||l3Step===4;
+  const evaluating=l3Step===1||l3Step===3||l3Step===5;
+  document.getElementById('l3-back').disabled=l3Step===0;
+  document.getElementById('l3-next').disabled=placing&&l3UserC.length<3;
+  document.getElementById('l3-next').textContent=t.l3next[l3Step];
+  const cv=document.getElementById('l3-cv');
+  if(placing){
+    const rem=3-l3UserC.length;
+    document.getElementById('l3-hint').textContent=rem>0?t.l3hp.replace('{r}',rem):t.l3hd;
+    document.getElementById('l3-dist-row').style.display='none';
+    l3DrawPlacing();
+    makeLegend('l3-leg',false,false,lang==='de'?'Nicht zugewiesen':'Unassigned','',['','','']);
+  }
+  if(evaluating){
+    document.getElementById('l3-hint').textContent=s.hint;
+    drawScene('l3-cv',l3Pts,l3FinalC,{showC:true,assigned:true,lines:true,prev:l3UserC});
+    l3ShowDistRow(l3Step!==5,cv.width);
+    makeLegend('l3-leg',true,true,lang==='de'?'Nicht zugewiesen':'Unassigned','Centroid',t.l2cn);
+    if(l3Step===3){
+      // Score with 30px tolerance zone = full marks
+      // 30px on a 668px wide canvas = 30/668 ≈ 0.0449 in normalised units
+      const TOL=30/668;
+      const avgDist=l3UserC.reduce((s,uc)=>{
+        const md=Math.min(...l3FinalC.map(fc=>dist(uc,fc)));return s+md;
+      },0)/3;
+      // Full score if within tolerance, then linear falloff
+      let sc;
+      if(avgDist<=TOL) sc=100;
+      else sc=Math.round(Math.max(0,Math.min(100,100-(avgDist-TOL)*350)));
+      saveScore(3,sc);
+      const t2=TX[lang];
+      document.getElementById('l3-dt').textContent=t2.l3ct;
+      document.getElementById('l3-dscore').textContent=sc+'%';
+      document.getElementById('l3-dp').textContent=t2.l3cp;
+      document.getElementById('l3-db').textContent=t2.l3cb;
+      document.getElementById('l3-db').disabled=!isUnlocked(4);
+      const un=document.getElementById('l3-unlock-note');
+      if(!isUnlocked(4)){un.style.display='block';un.textContent=t2.notUnlocked.replace('{p}',REQS[4].pct).replace('{l}',3);}
+      else un.style.display='none';
+      document.getElementById('l3-done').style.display='block';
+    }
+  }
+}
+function l3CanvasClick(e){
+  if(l3Step!==0&&l3Step!==2&&l3Step!==4)return;if(l3UserC.length>=3)return;
+  const cv=document.getElementById('l3-cv');const r=cv.getBoundingClientRect();
+  const sx=cv.width/r.width,sy=cv.height/r.height;
+  const[ax,ay]=fromXY((e.clientX-r.left)*sx,(e.clientY-r.top)*sy,cv.width,cv.height);
+  l3UserC.push({x:clamp(ax,.02,.98),y:clamp(ay,.02,.98)});l3Render();
+}
+function l3RunAlgo(){
+  l3C=l3UserC.map(c=>({...c}));assign(l3Pts,l3C);
+  for(let i=0;i<15;i++){const r=updateCens(l3Pts,l3C);l3C=r.nc;assign(l3Pts,l3C);if(r.moved<0.001)break;}
+  l3FinalC=l3C.map(c=>({...c}));
+}
+function l3Next(){
+  if(l3Step===0){l3RunAlgo();l3Step=1;l3Render();}
+  else if(l3Step===1){l3Step=2;l3Round=1;l3Reset(1);l3Render();}
+  else if(l3Step===2){l3RunAlgo();l3Step=3;l3Render();}
+  else if(l3Step===3){l3Step=4;l3Reset(0);l3IsSabotage=true;l3Render();}
+  else if(l3Step===4){l3RunAlgo();l3Step=5;l3Render();}
+  else goHome();
+}
+function l3Prev(){
+  if(l3Step===0)return;
+  if(l3Step===1){l3Step=0;l3Round=0;l3Reset(0);l3Render();}
+  else if(l3Step===2){l3Step=1;l3Render();}
+  else if(l3Step===3){l3Step=2;l3Round=1;l3Reset(1);l3Render();}
+  else if(l3Step===4){l3Step=3;l3Render();}
+  else if(l3Step===5){l3Step=4;l3Reset(0);l3Render();}
+}
+
+// ═══════════════════════════════════════════════════
+// LEVEL 4 – improved scoring + stop button
+// ═══════════════════════════════════════════════════
+let l4Step=0,l4Iter=0,l4Pts=[],l4C=[],l4Converged=false,l4LastMv=1,l4ConvergedAt=0;
+function l4Reset(){
+  l4Pts=genPts([[.2,.2],[.78,.2],[.48,.8]],0.22,30);
+  l4C=[{x:rand(.1,.4),y:rand(.1,.4)},{x:rand(.55,.9),y:rand(.1,.4)},{x:rand(.3,.7),y:rand(.6,.95)}];
+  assign(l4Pts,l4C);l4Iter=0;l4Converged=false;l4LastMv=1;l4ConvergedAt=0;
+}
+function l4CalcScore(){
+  // Score based on: did they correctly identify convergence (stop near converged iter)?
+  // Perfect = stop within 1 iter of convergence = 100%, each extra iter = -5, too early = penalty
+  if(!l4Converged)return 0;
+  const extra=Math.max(0,l4Iter-l4ConvergedAt);
+  return Math.round(Math.max(30,100-extra*5));
+}
+function l4ShowFb(msg,ok){
+  const fb=document.getElementById('l4-fb');
+  fb.innerHTML=`<span class="fmsg ${ok?'fok':'fbad'}">${msg}</span>`;
+  if(ok)setTimeout(()=>{fb.innerHTML='';},3000);
+}
+function l4TryStop(){
+  // Player claims convergence – check if they're right
+  const t=TX[lang];
+  if(!l4Converged){
+    l4ShowFb(t.l4tooEarly.replace('{m}',l4LastMv.toFixed(4)),false);
+    return;
+  }
+  l4Step=1;l4Render();
+}
+function l4Render(){
+  const t=TX[lang];const s=t.l4steps[l4Step];
+  document.getElementById('l4-tag').textContent=s.tag;document.getElementById('l4-tag').className='tag '+s.tc;
+  document.getElementById('l4-title').textContent=s.title;document.getElementById('l4-text').textContent=s.text;
+  document.getElementById('l4-hint').textContent=s.hint;
+  document.getElementById('l4-done').style.display='none';
+  prog('l4-prog',t.l4steps.length,l4Step);
+  document.getElementById('l4-back').disabled=l4Iter===0;
+  document.getElementById('l4-itl').textContent=t.l4il;
+  document.getElementById('l4-mvl').textContent=t.l4ml;
+  document.getElementById('l4-stl').textContent=t.l4sl;
+  document.getElementById('l4-it').textContent=l4Iter;
+  document.getElementById('l4-stop-btn').textContent=t.l4stop;
+  document.getElementById('l4-stop-btn').style.display=l4Step===0?'':'none';
+  if(l4Step===0){
+    document.getElementById('l4-next').textContent=t.l4ni;
+    document.getElementById('l4-next').disabled=false;
+    if(l4Iter===0)document.getElementById('l4-mv').textContent='–';
+    document.getElementById('l4-st').textContent=l4Converged?t.l4ss:t.l4sr;
+    document.getElementById('l4-sc-st').className='sc'+(l4Converged?' glow':'');
+  }else{
+    document.getElementById('l4-next').textContent=t.l4fin;
+    document.getElementById('l4-next').disabled=false;
+    document.getElementById('l4-st').textContent=t.l4ss;
+    document.getElementById('l4-sc-st').className='sc glow';
+    const sc=l4CalcScore();
+    saveScore(4,sc);
+    document.getElementById('l4-dt').textContent=t.l4ct;
+    document.getElementById('l4-dscore').textContent=sc+'%';
+    document.getElementById('l4-dp').textContent=t.l4scoreNote.replace('{s}',sc).replace('{it}',l4ConvergedAt||l4Iter);
+    document.getElementById('l4-db').textContent=t.l4cb;
+    document.getElementById('l4-done').style.display='block';
+  }
+  drawScene('l4-cv',l4Pts,l4C,{showC:true,assigned:true,lines:true});
+  makeLegend('l4-leg',true,true,lang==='de'?'Nicht zugewiesen':'Unassigned','Centroid',TX[lang].l2cn);
+}
+function l4Next(){
+  if(l4Step===1){goHome();return;}
+  const r=updateCens(l4Pts,l4C);l4C=r.nc;assign(l4Pts,l4C);l4Iter++;
+  const mv=r.moved;l4LastMv=mv;
+  document.getElementById('l4-mv').textContent=mv.toFixed(4);
+  document.getElementById('l4-it').textContent=l4Iter;
+  const wasConverged=l4Converged;
+  l4Converged=mv<0.002;
+  if(l4Converged&&!wasConverged)l4ConvergedAt=l4Iter;
+  document.getElementById('l4-st').textContent=l4Converged?TX[lang].l4ss:TX[lang].l4sr;
+  document.getElementById('l4-sc-st').className='sc'+(l4Converged?' glow':'');
+  drawScene('l4-cv',l4Pts,l4C,{showC:true,assigned:true,lines:true,prev:r.prev});
+  // Pulse the movement card to draw attention
+  const mvCard=document.getElementById('l4-sc-mv');
+  mvCard.style.boxShadow=mv<0.01?'var(--glow-teal)':mv<0.05?'var(--glow-amber)':'var(--glow-coral)';
+  setTimeout(()=>{mvCard.style.boxShadow='';},800);
+}
+function l4Prev(){if(l4Iter>0){l4Reset();l4Render();}}
+
+// ═══════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded',()=>{
+  renderSelect();renderIntro();l1Reset();l2GenData(0);l3Reset(0);l4Reset();
+  const cv2=document.getElementById('l2-cv');
+  cv2.addEventListener('click',l2CanvasClick);
+  cv2.addEventListener('touchend',e=>{e.preventDefault();const t=e.changedTouches[0];l2CanvasClick({clientX:t.clientX,clientY:t.clientY});},{passive:false});
+  const cv3=document.getElementById('l3-cv');
+  cv3.addEventListener('click',l3CanvasClick);
+  cv3.addEventListener('touchend',e=>{e.preventDefault();const t=e.changedTouches[0];l3CanvasClick({clientX:t.clientX,clientY:t.clientY});},{passive:false});
+});
+</script>
+</body>
+</html>
+
